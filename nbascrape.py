@@ -43,6 +43,14 @@ def getPlayers():
     return(df)
 
 
+# Creating a dictionary for player name/ID:
+def getDict():
+    playerDF=getPlayers() #Getting all players
+    playerDF['Name']=playerDF['FirstName']+' '+playerDF['LastName'] #adding a column for full name
+    lookup=dict(zip(playerDF['Name'], playerDF['PlayerID'])) #our dictionary
+    return(lookup)
+
+
 #Getting NBA players for given season
 def Players(Season):
     allplayers=getPlayers() #getting all players
@@ -181,6 +189,41 @@ def ShotChart(Season):
     
     print('Execution time: ' + str(executionMin)+' Minutes and '+str(executionSec)+ ' Seconds.')
     return(dfFinal)
+
+
+#Getting stat dashboard for player:
+def PlayerDashboard(playerName):
+    lookup=getDict() #Getting dictionary to lookup PlayerID
+    playerID=lookup.get(playerName)
+    urlbase='https://stats.nba.com/stats/playerdashboardbyyearoveryear?DateFrom=&DateTo=&GameSegment=&LastNGames=0&LeagueID=00&Location=&MeasureType=Base&Month=0&OpponentTeamID=0&Outcome=&PORound=0&PaceAdjust=N&PerMode=PerGame&Period=0&PlayerID='
+    urlend='&PlusMinus=N&Rank=N&Season=2020-21&SeasonSegment=&SeasonType=Regular+Season&ShotClockRange=&Split=yoy&VsConference=&VsDivision='
+    url=urlbase+str(playerID)+urlend
+    page=requests.get(url, headers=headers)
+    content=page.text
+    soup=BeautifulSoup(content)
+    site_json=json.loads(soup.text)
+    data=site_json['resultSets'][1]['rowSet']
+    columnNames=['GroupSet', 'GroupValue', 'TeamID', 'TeamAbb', 'MaxGameDate',
+                 'GP', 'W', 'L', 'W_PCT', 'MIN', 'FGM', 'FGA', 'FG_PCT', 'FG3M',
+                 'FG3A', 'FG3_PCT', 'FTM', 'FTA', 'FT_PCT', 'OREB', 'DREB', 'REB', 'AST',
+                 'TOV', 'STL', 'BLK', 'BLKA', 'PF', 'PFD', 'PTS', 'PlusMinus',
+                 'FanPts', 'DD2', 'TD3', 'GP_RANK', 'W_RANK', 'L_RANK', 'W_PCT_RANK',
+                 'MIN_RANK', 'FGM_RANK', 'FGA_RANK', 'FG_PCT_RANK', 'FG3M_RANK',
+                 'FG3A_RANK', 'FG3_PCT_RANK', 'FTM_RANK', 'FTA_RANK', 'FT_PCT_RANK',
+                 'OREB_RANK', 'DREB_RANK', 'REB_RANK', 'AST_RANK', 'TOV_RANK', 'STL_RANK',
+                 'BLK_RANK', 'BLKA_RANK', 'PF_RANK', 'PFD_RANK', 'PTS_RANK', 'PlusMinusRANK',
+                 'FanPtsRank', 'DD2_RANK', 'TD3_RANK', 'CFID', 'CFPARAMS']
+    df=pd.DataFrame(data, columns=columnNames)
+
+    return(df)
+
+    
+
+
+
+
+
+
 
 
 
