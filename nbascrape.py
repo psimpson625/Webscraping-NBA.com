@@ -40,14 +40,14 @@ def getPlayers():
                                'Height', 'Weight', 'College', 'Country', 'DraftYear',
                                'DraftRound', 'DraftNumber', 'RosterStatus', 'Ppg',
                                'Rpg', 'Apg', 'StatsTimeFrame', 'FromYr', 'ToYear'])
+    df['PlayerName']=df['FirstName']+' '+df['LastName']
     return(df)
 
 
 # Creating a dictionary for player name/ID:
 def getDict():
     playerDF=getPlayers() #Getting all players
-    playerDF['Name']=playerDF['FirstName']+' '+playerDF['LastName'] #adding a column for full name
-    lookup=dict(zip(playerDF['Name'], playerDF['PlayerID'])) #our dictionary
+    lookup=dict(zip(playerDF['PlayerName'], playerDF['PlayerID'])) #our dictionary
     return(lookup)
 
 
@@ -193,17 +193,22 @@ def ShotChart(Season):
 
 #Getting stat dashboard for player:
 def PlayerDashboard(playerName):
+
+    print('Getting Dashboard for '+playerName)
+    s=requests.Session()
+    s.headers['User-Agent']='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_2) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/34.0.1847.131 Safari/537.36'
     lookup=getDict() #Getting dictionary to lookup PlayerID
     playerID=lookup.get(playerName)
     urlbase='https://stats.nba.com/stats/playerdashboardbyyearoveryear?DateFrom=&DateTo=&GameSegment=&LastNGames=0&LeagueID=00&Location=&MeasureType=Base&Month=0&OpponentTeamID=0&Outcome=&PORound=0&PaceAdjust=N&PerMode=PerGame&Period=0&PlayerID='
     urlend='&PlusMinus=N&Rank=N&Season=2020-21&SeasonSegment=&SeasonType=Regular+Season&ShotClockRange=&Split=yoy&VsConference=&VsDivision='
     url=urlbase+str(playerID)+urlend
-    page=requests.get(url, headers=headers)
+    #page=requests.get(url, headers=headers)
+    page=s.get(url, headers=headers, timeout=5)
     content=page.text
     soup=BeautifulSoup(content)
     site_json=json.loads(soup.text)
     data=site_json['resultSets'][1]['rowSet']
-    columnNames=['GroupSet', 'GroupValue', 'TeamID', 'TeamAbb', 'MaxGameDate',
+    columnNames=['GroupSet', 'Season', 'TeamID', 'TeamAbb', 'MaxGameDate',
                  'GP', 'W', 'L', 'W_PCT', 'MIN', 'FGM', 'FGA', 'FG_PCT', 'FG3M',
                  'FG3A', 'FG3_PCT', 'FTM', 'FTA', 'FT_PCT', 'OREB', 'DREB', 'REB', 'AST',
                  'TOV', 'STL', 'BLK', 'BLKA', 'PF', 'PFD', 'PTS', 'PlusMinus',
@@ -214,18 +219,75 @@ def PlayerDashboard(playerName):
                  'BLK_RANK', 'BLKA_RANK', 'PF_RANK', 'PFD_RANK', 'PTS_RANK', 'PlusMinusRANK',
                  'FanPtsRank', 'DD2_RANK', 'TD3_RANK', 'CFID', 'CFPARAMS']
     df=pd.DataFrame(data, columns=columnNames)
-
+    df['PlayerName']=playerName #Creating column for full name
+    df.drop(['GroupSet','CFPARAMS'], inplace=True, axis=1) #dropping unnecessary columns
+    #Reordering columns-want PlayerName to be first
+    cols=df.columns.tolist()
+    cols=cols[-1:]+cols[:-1]
+    df=df[cols]
+    
     return(df)
 
     
 
 
+def getAllDashboards():
+    import time
+    StartTime=time.time()
+    playerList=getPlayers() #getting all players
+    playerList['ToYear']=playerList['ToYear'].astype(int) #will use retirement year as filter
+    playerList=playerList[playerList['ToYear']>=1996].PlayerName.tolist() #only want players who played post 1996
+    
+    for player in playerList:
+        playersleft=len(playerList)-1-playerList.index(player)
+        print('There are '+str(playersleft)+' players left to go')
+        try:
+            time.sleep(.25)
+            df=PlayerDashboard(player)
+            if player==playerList[0]:     
+                dfFinal=PlayerDashboard(player)
+            else:
+                dfFinal=dfFinal.append(df)
+            
+        except requests.exceptions.Timeout:
+            print('There was a connection error for '+player)
+            time.sleep(10)
+            playerList.insert(playerList.index(player), player)
+            continue
+        except ValueError:
+            continue
+        
+    executionTime = (time.time() - StartTime) #seconds
+    import math
+    executionMin=math.floor(executionTime/60)
+    executionSec=round(executionTime-(executionMin*60),0)
+    print('Execution time: ' + str(executionMin)+' Minutes and '+str(executionSec)+ ' Seconds.')
+    
+    return(dfFinal)
 
 
-
-
-
-
-
-
+#Getting player box scores dating back to 1996:
+def getAllBoxscores():
+    import time
+    StartTime=time.time()
+    year=2020
+    while year>1995:
+        print('Getting boxscores for '+str(year)+'-'+str(year+1)[2:4])
+        df=BoxScores(str(year)+'-'+str(year+1)[2:4])
+        if year==2020:
+            dfFinal=df
+        else:
+            dfFinal=dfFinal.append(df)
+        year=year-1  
+    
+    executionTime = (time.time() - StartTime) #seconds
+    import math
+    executionMin=math.floor(executionTime/60)
+    executionSec=round(executionTime-(executionMin*60),0)
+    print('Execution time: ' + str(executionMin)+' Minutes and '+str(executionSec)+ ' Seconds.')
+        
+    return(dfFinal)
+        
+    
+    
 
