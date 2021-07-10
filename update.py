@@ -1,7 +1,55 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Sun Jun 20 00:58:49 2021
+
+@author: patricksimpson
+"""
+
 import requests
 import json
 import pandas as pd
+from bs4 import BeautifulSoup as b4
 
+
+from PIL import Image
+from io import BytesIO
+
+from urllib.request import Request, urlopen
+req = Request('https://fullmatchtv.com/nba/philadelphia-76ers-vs-atlanta-hawks-18-06-21/', headers={'User-Agent': 'Mozilla/5.0'})
+
+
+
+webpage = urlopen(req).read()
+soup = b4(webpage.decode("utf-8"), "html.parser")
+
+links = soup.find_all('iframe')
+
+for link in links:
+    if 'streamtape.com' in str(link):
+        print(link['src']) #the streamtape link
+
+
+#response = requests.get(link)
+#img = Image.open(BytesIO(response.content))
+
+#page = requests.get('https://www.nba.com/player/201142/rotowire')
+#soup = b4(page.content, 'html.parser')
+
+#soup.find('div', class_='cplayer-bio__content').get_text().replace("\'", "'")
+
+
+#'https://ak-static.cms.nba.com/wp-content/uploads/headshots/nba/teamID/season/260x190/playerID.png'
+
+# Gobert image:
+#page = requests.get('https://www.nba.com/stats/player/203497/')
+#soup = b4(page.content, 'html.parser')
+#playerID = soup.find_all('img')[2]['player-id']
+#teamID = soup.find_all('img')[2]['team-id']
+#season = soup.find_all('img')[2]['season']
+#link = 'https://ak-static.cms.nba.com/wp-content/uploads/headshots/nba/teamID/season/260x190/playerID.png'
+
+#link=link.replace('teamID', teamID).replace('season', season).replace('playerID', playerID)
 
 
 
@@ -23,22 +71,36 @@ class Player:
     def __init__(self, name, season='2020-21', SeasonType = 'Regular Season'):
         self.name = name
         self.season = season
+        self.SeasonType = SeasonType
 
     def __repr__(self):
-        return f"Player({self.name}, {self.season})"
+        return f"Player({self.name}, {self.season} {self.SeasonType})"
 
     def id(self):
         pid = getDict().get(self.name)
         return pid
 
-    def dashboard(self):
+    def dashboard(self, MeasureType = 'Base'):
         pid = getDict().get(self.name)
+        if self.SeasonType == 'Regular Season':
+            s_type = 'Regular+Season'
+        elif self.SeasonType == 'Playoffs':
+            s_type = 'Playoffs'
+        
         url_base = 'https://stats.nba.com/stats/playerdashboardbyyearoveryear?DateFrom=&DateTo=&GameSegment' \
                    '=&LastNGames=0&LeagueID=00&Location=&MeasureType=Base&Month=0&OpponentTeamID=0&Outcome=&PORound=0' \
                    '&PaceAdjust=N&PerMode=PerGame&Period=0&PlayerID='
-        url_end = '&PlusMinus=N&Rank=N&Season=2020-21&SeasonSegment=&SeasonType=Regular+Season&ShotClockRange=&Split' \
-                  '=yoy&VsConference=&VsDivision='
-        url = url_base + str(pid) + url_end
+        url_1 = '&PlusMinus=N&Rank=N&Season=2020-21&SeasonSegment=&SeasonType='
+        url_2 = '&ShotClockRange=&Split=yoy&VsConference=&VsDivision='
+        url = url_base + str(pid) + url_1 + s_type + url_2
+        if MeasureType == 'Advanced':
+            url = url.replace('MeasureType=Base', 'MeasureType=Advanced')
+        elif MeasureType == 'Usage':
+            url = url.replace('MeasureType=Base', 'MeasureType=Usage')
+        elif MeasureType == 'Misc':
+            url = url.replace('MeasureType=Base', 'MeasureType=Misc')
+        elif MeasureType == 'Scoring':
+            url = url.replace('MeasureType=Base', 'MeasureType=Scoring')
         page=requests.get(url, headers=headers)
         col_names=page.json()['resultSets'][1]['headers']
         data=page.json()['resultSets'][1]['rowSet']
@@ -64,11 +126,41 @@ class Player:
                  '=&TeamID=0&VsConference=&VsDivision=&VsPlayerID1=&VsPlayerID2=&VsPlayerID3=&VsPlayerID4' \
                  '=&VsPlayerID5=&VsTeamID='
         url = baseurl + str(self.season) + securl + str(pid) + thirdurl + str(self.season) + endurl
+        if self.SeasonType == 'Playoffs':
+            url = url.replace('&SeasonType=Regular+Season', '&SeasonType=Playoffs')
+        elif self.SeasonType == 'PlayIn':
+            url = url.replace('&SeasonType=Regular+Season', '&SeasonType=PlayIn')
+        elif self.SeasonType == 'PreSeason':
+            url = url.replace('&SeasonType=Regular+Season', '&SeasonType=Pre+Season')
         page=requests.get(url, headers=headers)
         col_names=page.json()['resultSets'][0]['headers']
         data=page.json()['resultSets'][0]['rowSet']
         df=pd.DataFrame(data,columns=col_names)
         return df
+    
+    def bio(self):
+        pid = getDict().get(self.name)
+        url = 'https://www.nba.com/player/ID/rotowire'
+        url = url.replace('ID', str(pid))
+        page = requests.get(url)
+        soup = b4(page.content, 'html.parser')
+        bio = soup.find('div', class_='cplayer-bio__content').get_text().replace("\'", "'")
+        return bio
+    
+    def headshot(self):
+        pid = getDict().get(self.name)
+        general_link = 'https://www.nba.com/stats/player/pid/'
+        general_link = general_link.replace('pid', str(pid))
+        page = requests.get(general_link)
+        soup = b4(page.content, 'html.parser')
+        playerID = soup.find_all('img')[2]['player-id']
+        teamID = soup.find_all('img')[2]['team-id']
+        season = soup.find_all('img')[2]['season']
+        link = 'https://ak-static.cms.nba.com/wp-content/uploads/headshots/nba/teamID/season/260x190/playerID.png'
+        link=link.replace('teamID', teamID).replace('season', season).replace('playerID', playerID)
+        response = requests.get(link)
+        return Image.open(BytesIO(response.content))
+
 
 
 
